@@ -1,6 +1,6 @@
 {
   "name": "@senzil/cec-monitor",
-  "version": "2.1.1-0",
+  "version": "2.1.1-1",
   "description": "HDMI-CEC library with a simple monitor written on ES6 to make cec enabled apps.",
   "author": {
     "name": "SENZIL SRL",
@@ -61,7 +61,8 @@
     "build": "npm run lint && babel src -d lib",
     "test": "babel src -d lib && node test/test.js",
     "prepublishOnly": "npm run build",
-    "release": "npm version --no-git-tag-version prerelease && git add ."
+    "release": "npm version --no-git-tag-version prerelease && git add .",
+    "prepare": "npm run build"
   },
   "devDependencies": {
     "@babel/cli": "^7.2.3",
