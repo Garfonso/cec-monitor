@@ -7,7 +7,6 @@
 import {spawn} from 'child_process'
 import {EventEmitter} from 'events'
 import estream from 'event-stream'
-import deasync from 'deasync'
 import CEC from './HDMI-CEC.1.4'
 import ON_DEATH from 'death'
 import CECAdapterNotReadyError from './CECAdapterNotReadyError'
@@ -192,28 +191,6 @@ export default class CECMonitor extends EventEmitter {
   }
 
   /**
-   * Get copy of internal state information on CEC bus
-   *
-   * @param {number|string} [address] Optional address to request state for.
-   * (physical, logical or CEC.LogicalAddress names)
-   * If omitted, return an array of all addresses indexed by logical address
-   *
-   * @return {object|array[object]} An object or array of objects
-   * @see WriteMessage
-   * with index as the logical device address and/or values an object
-   * representing state of the logical address
-   */
-  GetState = function(address) {
-    address = _parseAddress.call(this, address, undefined)
-
-    // Return copy of our state information
-    if (address === undefined) {
-      return JSON.parse(JSON.stringify(_getUpdatedStateManager.call(this)))
-    }
-    return JSON.parse(JSON.stringify(_getUpdatedDeviceState.call(this, address)))
-  }.bind(this)
-
-  /**
    * Get physical address of this instance
    * @return {string} Physical address used by this instance
    */
@@ -248,7 +225,7 @@ export default class CECMonitor extends EventEmitter {
     if (logical === null) {
       return null
     }
-    return _getUpdatedDeviceState.call(this, logical).route
+    return _getUpdatedDeviceStateAsync.call(this, logical).route
   }.bind(this)
 
   /**
@@ -273,7 +250,7 @@ export default class CECMonitor extends EventEmitter {
     if (address === null) {
       return ''
     }
-    return _getUpdatedDeviceState.call(this, address).osdname
+    return _getUpdatedDeviceStateAsync.call(this, address).osdname
   }.bind(this)
 
   /**
@@ -288,7 +265,7 @@ export default class CECMonitor extends EventEmitter {
     if (address === null) {
       return null
     }
-    return _getUpdatedDeviceState.call(this, address).status
+    return _getUpdatedDeviceStateAsync.call(this, address).status
   }.bind(this)
 
   /**
@@ -303,7 +280,7 @@ export default class CECMonitor extends EventEmitter {
     if (address === null) {
       return null
     }
-    return _getUpdatedDeviceState.call(this, address).power
+    return _getUpdatedDeviceStateAsync.call(this, address).power
   }.bind(this)
 
   /**
@@ -426,8 +403,11 @@ export default class CECMonitor extends EventEmitter {
    * @public
    */
   WaitForReady = async function() {
-    deasync.loopWhile(() => !this.ready)
-    return this.ready
+    return new Promise((resolve) => {
+      this.once(CECMonitor.EVENTS._READY, () => {
+        resolve(this.ready)
+      })
+    })
   }.bind(this);
 
   Stop = function() {
@@ -443,32 +423,6 @@ export default class CECMonitor extends EventEmitter {
  * THEY SHOULD NOT BE USED BY END USERS AND SHOULD NOT BE EXPORTED
  *
  * ***/
-const _getUpdatedStateManager = function() {
-  if (this.cache.enable && this.cache.timeout > 0 && this.state_manager.timestamp < Date.now() - this.cache.timeout * 1000) {
-    return this.state_manager.map(ds => _getUpdatedDeviceState.call(this, ds.logical))
-  }
-
-  return this.state_manager
-}
-
-const _getUpdatedDeviceState = function (address) {
-
-  const currentState  = this.state_manager[address]
-
-  if (this.cache.enable && this.cache.timeout > 0 && currentState.timestamp < Date.now() - this.cache.timeout * 1000) {
-    this.emit(CECMonitor.EVENTS._EXPIREDCACHE, currentState)
-
-    if (this.cache.autorefresh) {
-      let done = false
-      _getUpdatedDeviceStateAsync.call(this, address).then(() => done = true)
-      deasync.loopWhile(() => !done)
-      return this.state_manager[address]
-    }
-  }
-
-  return currentState
-}
-
 const _getUpdatedDeviceStateAsync = function(address) {
   const primary = this.GetLogicalAddress()
   return this.SendCommand(primary, address, CEC.Opcode.GIVE_DEVICE_POWER_STATUS, CECMonitor.EVENTS.REPORT_POWER_STATUS)
